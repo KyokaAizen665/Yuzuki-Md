@@ -132,12 +132,13 @@ export function buildMain(botName, prefix) {
     .join("\n");
 
   return (
-    `⚡ *\`${botName}\`*\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
-    `✦ *Prefix:* ${prefix}  •  Type ${prefix}menu <category>\n\n` +
-    `*【 MENU CATEGORIES 】*\n` +
-    cats +
-    `\n\n_Type ${prefix}ai · ${prefix}tools · ${prefix}fun etc._`
+    `╭─〔 🤖 *ʙᴏᴛ ɪɴꜰᴏ* 〕
+     │ *${botName}*
+     │ *Prefix:* ${prefix}
+     │ *Usage:* ${prefix}<category>
+     ╰────────────────⬣\n
+     *MENU CATEGORIES*
+      > Made With ♥ by Aizen`
   );
 }
 
