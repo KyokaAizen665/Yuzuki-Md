@@ -37,7 +37,13 @@ const log = {
 // ── Interactive phone number prompt ───────────────────────────────────────────
 async function promptPhone() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // FIX: Added timeout protection to prevent hanging
+    const timeout = setTimeout(() => {
+      rl.close();
+      reject(new Error("Phone input timeout (60s)"));
+    }, 60000);
+
     const line = "=".repeat(44);
     console.log(`\n${line}`);
     console.log("  🔗 WhatsApp Pairing Setup");
@@ -45,8 +51,21 @@ async function promptPhone() {
     console.log("  (digits only, e.g. 233531234567)");
     console.log(`${line}`);
     rl.question("  Your number: ", (answer) => {
+      clearTimeout(timeout);
       rl.close();
-      resolve(answer.replace(/[^0-9]/g, ""));
+      const cleaned = answer.replace(/[^0-9]/g, "");
+      // FIX: Validate phone number length
+      if (!cleaned || cleaned.length < 10) {
+        reject(new Error("Invalid phone number (too short)"));
+      } else {
+        resolve(cleaned);
+      }
+    });
+
+    // FIX: Handle readline errors
+    rl.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
     });
   });
 }
@@ -61,6 +80,7 @@ export const state = {
 };
 
 let reconnectTimer = null;
+let messageHandler = null; // FIX: Track event listener to prevent duplicates
 
 /**
  * Extract plain text from any message type Baileys sends.
@@ -124,10 +144,11 @@ export async function startBot() {
   // Request pairing code if not yet registered
   if (!sock.authState.creds.registered) {
     // Prompt user for their phone number (interactive)
-    let phoneNumber = await promptPhone();
-
-    if (!phoneNumber) {
-      console.log("\n[!] No number entered. Restart to try again.\n");
+    let phoneNumber;
+    try {
+      phoneNumber = await promptPhone();
+    } catch (err) {
+      console.log(`\n[!] ${err.message}\n`);
       return;
     }
 
@@ -198,14 +219,16 @@ export async function startBot() {
 
       // ── WhatsApp startup notification to owner ────────────────────
       const startupCfg = loadSettings();
-      const ownerJid = (startupCfg.ownerNumber || (process.env.PHONE_NUMBER ?? "").replace(/[^0-9]/g, ""))
-        ? `${startupCfg.ownerNumber || (process.env.PHONE_NUMBER ?? "").replace(/[^0-9]/g, "")}@s.whatsapp.net`
-        : null;
+      // FIX: Simplified redundant phone number extraction
+      const ownerPhone = startupCfg.ownerNumber || (process.env.PHONE_NUMBER ?? "").replace(/[^0-9]/g, "");
+      const ownerJid = ownerPhone ? `${ownerPhone}@s.whatsapp.net` : null;
+      
       if (ownerJid) {
         const botName = state.botName || startupCfg.botName || "Yuzuki MD";
-        const now = new Date().toLocaleString("en-US", {
+        // FIX: Use local timezone instead of hardcoded en-US
+        const now = new Date().toLocaleString(undefined, {
           weekday: "short", month: "short", day: "numeric",
-          hour: "2-digit", minute: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit",
         });
         //Next upgrage add contextInfo to this message for a thumbnail (small)
         sock.sendMessage(ownerJid, {
@@ -214,7 +237,7 @@ export async function startBot() {
             `━━━━━━━━━━━━━━━━━━━\n` +
             `✅ *Status:* Connected\n` +
             `📱 *Bot Number:* ${state.phoneNumber ?? "unknown"}\n` +
-            `👑 *Owner:* ${startupCfg.ownerNumber}\n` +
+            `👑 *Owner:* ${ownerPhone}\n` +
             `🔑 *Prefix:* ${startupCfg.prefix ?? "."}\n` +
             `🕐 *Time:* ${now}\n` +
             `━━━━━━━━━━━━━━━━━━━\n` +
@@ -226,13 +249,31 @@ export async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // FIX: Remove old listener before adding new one to prevent duplicates
+  if (messageHandler) {
+    sock.ev.off("messages.upsert", messageHandler);
+  }
+
+  // FIX: Cache settings to avoid reloading on every message
+  let cachedSettings = null;
+  let settingsCacheTime = 0;
+  const CACHE_TTL = 30000; // 30 seconds
+
+  messageHandler = async ({ messages, type }) => {
     log.event(`messages.upsert ${chalk.white("type=")}${chalk.cyan(type)} ${chalk.white("count=")}${chalk.cyan(messages.length)}`);
 
     if (type !== "notify") {
       log.skip(`type ${chalk.dim(type)} is not ${chalk.cyan("notify")}`);
       return;
     }
+
+    // FIX: Cache settings to reduce file I/O
+    const now = Date.now();
+    if (!cachedSettings || now - settingsCacheTime > CACHE_TTL) {
+      cachedSettings = loadSettings();
+      settingsCacheTime = now;
+    }
+    const settings = cachedSettings;
 
     for (const msg of messages) {
       const msgTypes = msg.message ? Object.keys(msg.message) : [];
@@ -242,7 +283,7 @@ export async function startBot() {
         // Linked-device bot: owner's own typing also arrives as fromMe.
         // Let command-like messages through; skip bot's own replies.
         const quickText = extractText(msg);
-        const quickPrefix = loadSettings().prefix ?? ".";
+        const quickPrefix = settings.prefix ?? ".";
         if (!quickText || !quickText.startsWith(quickPrefix)) {
           log.skip(`fromMe non-command ${chalk.dim("(bot reply)")}`);
           continue;
@@ -263,7 +304,6 @@ export async function startBot() {
       }
 
       try {
-        const settings = loadSettings();
         const prefix = settings.prefix ?? ".";
         const mode = settings.mode ?? "public";
 
@@ -299,13 +339,21 @@ export async function startBot() {
         if (!command) continue;
 
         log.cmd(`${chalk.white(".")}${chalk.magentaBright(command)} ${chalk.dim(args.join(" "))}`);
-        await handleCommand({ sock, msg, command, args });
-        log.ok(`${chalk.greenBright("." + command)} completed`);
+        // FIX: Better error handling for command execution
+        try {
+          await handleCommand({ sock, msg, command, args });
+          log.ok(`${chalk.greenBright("." + command)} completed`);
+        } catch (cmdErr) {
+          log.err(`Command failed: ${chalk.redBright(cmdErr?.message ?? cmdErr)}`);
+          logger.error({ err: cmdErr, command }, "Command execution failed");
+        }
       } catch (err) {
         log.err(`${chalk.redBright(err?.message ?? err)}`);
       }
     }
-  });
+  };
+
+  sock.ev.on("messages.upsert", messageHandler);
 }
 
 export async function stopBot() {
@@ -314,6 +362,11 @@ export async function stopBot() {
     reconnectTimer = null;
   }
   if (state.socket) {
+    // FIX: Remove message handler before closing
+    if (messageHandler) {
+      state.socket.ev.off("messages.upsert", messageHandler);
+      messageHandler = null;
+    }
     await state.socket.logout().catch(() => {});
     state.socket = null;
   }
