@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { startBot, logger } from "./bot.js";
 
-logger.info("Starting WhatsApp bot...");
+logger.info("🐋 Starting bot...");
 logger.info("Tip: Scan the QR code that appears in the console with WhatsApp > Linked Devices");
 
 startBot().catch((err) => {
