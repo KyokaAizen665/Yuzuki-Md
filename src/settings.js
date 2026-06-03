@@ -78,12 +78,10 @@ export function removeOwner(number) {
 }
 
 export function isOwner(senderJid, settings) {
-  // Strip both @domain and :device suffix (e.g. 1234:5@s.whatsapp.net → 1234)
   const clean = (jid) => jid?.split("@")[0]?.split(":")[0] ?? "";
   const sender = clean(senderJid);
   // 1. Check settings ownerNumber
   if (settings.ownerNumber && sender === settings.ownerNumber) return true;
-  // 2. Fallback: check PHONE_NUMBER env (Pterodactyl env var) — always the real owner
   const envOwner = (process.env.PHONE_NUMBER ?? "").replace(/[^0-9]/g, "");
   if (envOwner && sender === envOwner) return true;
   // 3. Check owners array
@@ -132,7 +130,6 @@ export function removeReseller(number) {
   return s.resellers.length < before;
 }
 
-// FIX: added resetReseller (was in OWNER_COMMANDS but had no implementation)
 export function resetReseller(number, newQuota = null) {
   const s = loadSettings();
   const r = (s.resellers ?? []).find((r) => r.number === number);
