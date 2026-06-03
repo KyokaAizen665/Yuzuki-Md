@@ -14,7 +14,7 @@ const DEFAULTS = {
   antidelete: false,
   autoblock: false,
   gconly: false,
-  menuBgUrl: "https://c.termai.cc/i183/r021.jpg",
+  menuBgUrl: "https://litter.catbox.moe/86d9vf.jpg",
   channelId: "120363406397452589@newsletter",
   channelName: "Yuzuki   更新",
   owners: [],
