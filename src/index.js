@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./server.js";
 import { startBot, logger } from "./bot.js";
 
 // Validate Node version
