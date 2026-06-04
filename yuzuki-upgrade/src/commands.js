@@ -31,7 +31,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import sharp from "sharp";
 import QRCode from "qrcode";
 import ytdl from "@distube/ytdl-core";
-import { downloadMediaMessage } from "@whiskeysockets/baileys";
+import { createRequire } from "module";
+const _require = createRequire(import.meta.url);
+const {
+  downloadMediaMessage,
+  generateWAMessageFromContent,
+  prepareWAMessageMedia,
+  proto,
+} = _require("socketon");
 // ── HydroMD merged scrapers & libs ──────────────────────────────────────────
 import { tiktokDl } from "./lib/scrape/tiktok.js";
 import { igdl as igDl } from "./lib/scrape/instagram.js";
@@ -835,7 +842,7 @@ export async function handleCommand({ sock, msg, command, args }) {
           `A feature-rich WhatsApp bot built with Baileys.\n\n` +
           `🔑 *Prefix:* ${settings.prefix ?? "."}\n` +
           `👑 *Owner:* 233533416608\n` +
-          `📦 *Platform:* Node.js + @whiskeysockets/baileys`
+          `📦 *Platform:* Node.js + socketon (focashi fork)`
         );
         break;
       }

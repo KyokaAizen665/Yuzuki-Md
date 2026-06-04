@@ -1,8 +1,11 @@
-import makeWASocket, {
+import { createRequire } from "module";
+const _require = createRequire(import.meta.url);
+const {
+  default: makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-} from "@whiskeysockets/baileys";
+} = _require("socketon");
 import path from "path";
 import readline from "readline";
 import fs from "fs";
