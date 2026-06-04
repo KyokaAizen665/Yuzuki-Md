@@ -1,26 +1,26 @@
-FROM node:22-alpine
+# syntax = docker/dockerfile:1
 
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev \
-    librsvg-dev \
-    vips-dev \
-    ffmpeg
+ARG NODE_VERSION=22.21.1
+FROM node:${NODE_VERSION}-slim
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    git \
+    ffmpeg \
+    python3 \
+    build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
-RUN npm ci --omit=dev
+
+RUN npm install
 
 COPY . .
 
-RUN mkdir -p bot_session data
+EXPOSE 8080
 
-EXPOSE 3000
-
-CMD ["node", "src/index.js"]
+CMD ["npm", "start"]
